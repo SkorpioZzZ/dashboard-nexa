@@ -4,6 +4,7 @@ const cors = require('cors')
 const helmet = require('helmet')
 const morgan = require('morgan')
 const crypto = require('node:crypto')
+const path = require('node:path')
 const { promisify } = require('node:util')
 const { z } = require('zod')
 const { pool, initializeDatabase } = require('./db')
@@ -702,6 +703,16 @@ app.delete(
     res.status(204).end()
   })
 )
+
+const clientDist = path.join(__dirname, '../../client/dist')
+
+app.use(express.static(clientDist))
+
+app.get(/^(?!\/api(?:\/|$)).*/, (req, res, next) => {
+  res.sendFile(path.join(clientDist, 'index.html'), (error) => {
+    if (error) next(error)
+  })
+})
 
 app.use((error, req, res, next) => {
   console.error(error)

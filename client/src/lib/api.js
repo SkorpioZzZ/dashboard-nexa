@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:3000'
+const API_URL = import.meta.env.VITE_API_URL || ''
 
 export async function api(path, options = {}) {
   const response = await fetch(`${API_URL}/api${path}`, {
