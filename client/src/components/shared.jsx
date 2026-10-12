@@ -7,6 +7,9 @@ const glyphs = {
   folder: '▰',
   check: '✓',
   settings: '⚙',
+  history: '↶',
+  edit: '✎',
+  trash: '⌫',
   logout: '↪',
   grid: '▦',
   'check-square': '☑',
@@ -16,7 +19,40 @@ const glyphs = {
   external: '↗',
 }
 
-export function Icon({ name, size = 16 }) {
+const sidebarIconPaths = {
+  grid: ['M4 4h6v6H4z', 'M14 4h6v6h-6z', 'M4 14h6v6H4z', 'M14 14h6v6h-6z'],
+  folder: ['M3 6h7l2 2h9v10H3z'],
+  'check-square': ['M9 11l2 2 4-4', 'M5 4h14v16H5z'],
+  users: [
+    'M16 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1',
+    'M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+    'M17 11a4 4 0 0 0 0-7.7',
+  ],
+  calendar: ['M5 4h14v16H5z', 'M8 2v4', 'M16 2v4', 'M5 9h14'],
+  mail: ['M4 5h16v14H4z', 'm4 7 8 6 8-6'],
+  external: ['M14 5h5v5', 'M19 5l-8 8', 'M19 13v6H5V5h6'],
+  history: ['M3 12a9 9 0 1 0 3-6.7', 'M3 4v6h6'],
+  settings: [
+    'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
+    'M4.9 4.9l1.4 1.4',
+    'M17.7 17.7l1.4 1.4',
+    'M12 2v2',
+    'M12 20v2',
+    'M2 12h2',
+    'M20 12h2',
+  ],
+}
+
+export function Icon({ name, size = 16, variant }) {
+  if (variant === 'sidebar' && sidebarIconPaths[name]) {
+    return (
+      <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none">
+        {sidebarIconPaths[name].map((path) => (
+          <path key={path} d={path} />
+        ))}
+      </svg>
+    )
+  }
   return (
     <span aria-hidden="true" style={{ display: 'inline-block', width: size, textAlign: 'center' }}>
       {glyphs[name] || '•'}
@@ -24,10 +60,11 @@ export function Icon({ name, size = 16 }) {
   )
 }
 
-export function Header({ title, eyebrow, action }) {
+export function Header({ title, eyebrow, action, welcome }) {
   return (
     <header className="topbar">
       <div>
+        {welcome && <h2 className="header-welcome">{welcome}</h2>}
         <span className="eyebrow">{eyebrow}</span>
         <h1>{title}</h1>
       </div>
@@ -66,13 +103,22 @@ export function Sidebar({ user, onLogout }) {
             className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
           >
             <span className="nav-icon">
-              <Icon name={item.icon} />
+              <Icon name={item.icon} variant="sidebar" size={18} />
             </span>
             {item.label}
           </NavLink>
         ))}
       </nav>
       <div className="sidebar-bottom">
+        <NavLink
+          to="/parametres"
+          className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+        >
+          <span className="nav-icon">
+            <Icon name="settings" variant="sidebar" size={18} />
+          </span>
+          Paramètres
+        </NavLink>
         <div className="user-card">
           <span className="avatar avatar-lilac">{initials}</span>
           <span>
@@ -163,6 +209,24 @@ export function ActivityRows({ activity }) {
   })
 }
 
+export function EmailRows({ emails }) {
+  return (
+    <div className="email-list">
+      {emails.map((email) => (
+        <article className={`email-item ${email.unread ? 'unread' : ''}`} key={email.subject}>
+          <Avatar initials={email.initials} color={email.color} />
+          <span className="email-copy">
+            <strong>{email.sender}</strong>
+            <b>{email.subject}</b>
+            <small>{email.preview}</small>
+          </span>
+          <time>{email.time}</time>
+        </article>
+      ))}
+    </div>
+  )
+}
+
 export function ProjectRow({ project }) {
   const navigate = useNavigate()
   return (
@@ -213,6 +277,7 @@ export function TaskTable({ tasks, projects }) {
                 .join('')}
               color={task.color}
             />
+            <span className="task-assignee-name">{task.person || 'Sans responsable'}</span>
           </span>
           <span className="task-date">{displayDate(task.due)}</span>
           <span className="task-status">{task.status}</span>

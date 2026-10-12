@@ -37,7 +37,7 @@
 .kanban-board {
   display: grid;
   grid-template-columns: repeat(4, minmax(220px, 1fr));
-  gap: 14px;
+  gap: var(--space-4);
   align-items: start;
   overflow-x: auto;
   padding-bottom: 10px;
@@ -80,6 +80,7 @@
   padding: 13px;
   box-shadow: 0 2px 5px #25243608;
   cursor: grab;
+  touch-action: none;
 }
 .kanban-card:active {
   cursor: grabbing;
@@ -88,6 +89,46 @@
   font-size: 12px;
   line-height: 1.45;
   display: block;
+}
+.kanban-card-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.kanban-card-title-row > strong {
+  font-size: 12px;
+  line-height: 1.45;
+}
+.kanban-drag-handle {
+  flex: none;
+  padding: 0 2px;
+  background: transparent;
+  color: #a09eae;
+  font-size: 17px;
+  line-height: 1;
+  cursor: grab;
+  touch-action: none;
+  pointer-events: none;
+}
+.kanban-card select,
+.kanban-card button {
+  touch-action: auto;
+}
+.kanban-drag-handle:focus-visible {
+  outline: 2px solid #7667ed;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.kanban-card.saving {
+  border-color: #b9b0ff;
+  box-shadow: 0 0 0 2px #7667ed12;
+}
+.kanban-saving {
+  display: block;
+  margin-top: 8px;
+  color: #7667ed;
+  font-size: 9px;
 }
 .kanban-card-meta {
   display: flex;

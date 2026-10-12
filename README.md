@@ -78,7 +78,7 @@ Depuis la racine du projet — le dossier qui contient `package.json`, `client/`
    npm run dev
    ```
 
-   Le script démarre PostgreSQL avec Docker Compose, puis l’API et le serveur de développement Vite.
+   Le script démarre PostgreSQL avec Docker Compose, attend son état prêt et vérifie la connexion configurée avant de lancer l’API et Vite. Il ne modifie pas les identifiants PostgreSQL et ne recrée pas le volume.
 
 4. Ouvre **http://127.0.0.1:5173** dans ton navigateur. Garde le terminal ouvert pendant l’utilisation de Nexa.
 
@@ -145,7 +145,7 @@ En configuration de développement, PostgreSQL tourne dans un conteneur Docker. 
 
 Les préférences, les liens de raccourci et le carnet de l’équipe sont conservés dans le stockage local du navigateur. Ils ne sont pas synchronisés avec PostgreSQL et ne suivent pas automatiquement l’utilisateur vers un autre navigateur ou appareil. Les aperçus de la page Email sont des exemples statiques.
 
-Les mots de passe des comptes sont hachés côté serveur avec scrypt. La session est conservée dans un cookie signé `HttpOnly`, valable sept jours. En production, l’API marque ce cookie `Secure` lorsque `NODE_ENV=production` ; la configuration et le déploiement de production restent à mettre en place séparément.
+Les mots de passe des comptes sont hachés côté serveur avec scrypt. La session utilise un cookie signé `HttpOnly`, valable sept jours et vérifié avec la version de session du compte. La déconnexion et le changement de mot de passe révoquent les anciens cookies. La mise à jour du schéma invalide les cookies émis par les versions précédentes : les comptes existants devront se reconnecter une fois, sans changement de leurs mots de passe. En production, l’API marque ce cookie `Secure` lorsque `NODE_ENV=production` ; la configuration et le déploiement de production restent à mettre en place séparément.
 
 ## Configuration
 
@@ -173,7 +173,8 @@ Docker Compose publie PostgreSQL sur le port **5433** de l’ordinateur et utili
 | `npm run build --prefix client` | Génère la version de production de l’interface dans `client/dist/` |
 | `npm run lint --prefix client` | Lance Oxlint sur l’interface |
 | `npm start --prefix server` | Lance l’API sans le mode de développement Nodemon |
-| `npm test --prefix server` | Lance Jest côté serveur (aucune suite de tests n’est actuellement fournie dans le dépôt) |
+| `docker compose -f docker-compose.test.yml up -d --wait` | Démarre la base PostgreSQL réservée aux tests |
+| `npm test --prefix server` | Lance Jest exclusivement sur la base PostgreSQL de test |
 
 Pour arrêter l’ensemble des processus lancés par `npm run dev`, fais **Ctrl+C** dans le terminal.
 
@@ -224,7 +225,7 @@ Vérifie que les deux messages de démarrage de l’API et de Vite apparaissent 
 
 ### « Initialisation PostgreSQL impossible »
 
-L’API n’a pas pu se connecter à PostgreSQL ou créer ses tables. Vérifie que le conteneur est actif (`docker compose ps`), que `DATABASE_URL` correspond au port et aux identifiants configurés, puis relance `npm run dev`. Consulte l’erreur complète affichée dans le terminal.
+L’API n’a pas pu se connecter à PostgreSQL ou créer ses tables. Vérifie que le conteneur est actif (`docker compose ps`) et que `DATABASE_URL` correspond aux identifiants déjà associés au volume local, puis relance `npm run dev`. Le script ne réinitialise pas le mot de passe PostgreSQL ; si les identifiants ne correspondent pas, il arrête le démarrage sans modifier la base.
 
 ### L’adresse e-mail ou le nom d’utilisateur est déjà utilisé
 

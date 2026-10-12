@@ -51,3 +51,10 @@ export function getProjectStatus(projectId, tasks) {
     ? 'Terminé'
     : 'En cours'
 }
+
+export const getProjectsWithProgress = (projects, tasks) =>
+  projects.map((project) => ({
+    ...project,
+    progress: getProjectProgress(project.id, tasks),
+    status: getProjectStatus(project.id, tasks),
+  }))

@@ -1,4 +1,4 @@
-require('dotenv').config()
+if (process.env.NODE_ENV !== 'test') require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
@@ -7,12 +7,19 @@ const crypto = require('node:crypto')
 const { promisify } = require('node:util')
 const { z } = require('zod')
 const { pool, initializeDatabase } = require('./db')
+const { createRateLimiter } = require('./rateLimit')
 
 const app = express()
 const scrypt = promisify(crypto.scrypt)
 const COOKIE = 'nexa_session'
 const SESSION_DAYS = 7
 const secret = process.env.SESSION_SECRET
+const trustedProxies = (process.env.TRUSTED_PROXIES || '')
+  .split(',')
+  .map((proxy) => proxy.trim())
+  .filter(Boolean)
+
+if (trustedProxies.length) app.set('trust proxy', trustedProxies)
 
 app.use(helmet())
 app.use(
@@ -24,8 +31,44 @@ app.use(
 app.use(express.json({ limit: '100kb' }))
 app.use(morgan('dev'))
 
+const loginRateLimit = createRateLimiter({
+  pool,
+  secret,
+  operation: 'auth-login-ip',
+  maxRequests: 20,
+  windowSeconds: 15 * 60,
+  getIdentifier: (req) => req.ip,
+})
+const registrationRateLimit = createRateLimiter({
+  pool,
+  secret,
+  operation: 'auth-register-ip',
+  maxRequests: 5,
+  windowSeconds: 60 * 60,
+  getIdentifier: (req) => req.ip,
+})
+const passwordChangeRateLimit = createRateLimiter({
+  pool,
+  secret,
+  operation: 'auth-change-password-user-ip',
+  maxRequests: 5,
+  windowSeconds: 15 * 60,
+  getIdentifier: (req) => `${req.userId}:${req.ip}`,
+})
+const accountDeletionRateLimit = createRateLimiter({
+  pool,
+  secret,
+  operation: 'auth-delete-account-user-ip',
+  maxRequests: 5,
+  windowSeconds: 15 * 60,
+  getIdentifier: (req) => `${req.userId}:${req.ip}`,
+})
+
 function cookieOptions() {
   return `Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`
+}
+function clearCookieOptions() {
+  return `Path=/; HttpOnly; SameSite=Lax; Max-Age=0${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`
 }
 function sign(payload) {
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
@@ -47,7 +90,7 @@ function verify(token) {
     return null
   try {
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString())
-    return payload.exp > Date.now() ? payload : null
+    return payload.exp > Date.now() && Number.isInteger(payload.sessionVersion) ? payload : null
   } catch {
     return null
   }
@@ -62,9 +105,27 @@ function parseCookies(header = '') {
 }
 function requireAuth(req, res, next) {
   const session = verify(parseCookies(req.headers.cookie)[COOKIE])
-  if (!session) return res.status(401).json({ error: 'Connectez-vous pour continuer.' })
-  req.userId = session.sub
-  next()
+  if (!session || !z.string().uuid().safeParse(session.sub).success)
+    return res.status(401).json({ error: 'Connectez-vous pour continuer.' })
+  pool
+    .query('SELECT session_version FROM users WHERE id=$1', [session.sub])
+    .then(({ rows }) => {
+      if (!rows[0] || rows[0].session_version !== session.sessionVersion) {
+        return res.status(401).json({ error: 'Connectez-vous pour continuer.' })
+      }
+      req.userId = session.sub
+      req.sessionVersion = session.sessionVersion
+      next()
+    })
+    .catch(next)
+}
+function sessionCookie(user) {
+  const token = sign({
+    sub: user.id,
+    sessionVersion: user.session_version,
+    exp: Date.now() + SESSION_DAYS * 86400000,
+  })
+  return `${COOKIE}=${token}; ${cookieOptions()}`
 }
 function asyncRoute(handler) {
   return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
@@ -113,6 +174,7 @@ async function hasProjectPermission(userId, projectId, permission) {
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }))
 app.post(
   '/api/auth/register',
+  registrationRateLimit,
   asyncRoute(async (req, res) => {
     const input = credentials
       .extend({
@@ -137,15 +199,20 @@ app.post(
     const hash = (await scrypt(password, salt, 64)).toString('hex')
     try {
       const { rows } = await pool.query(
-        'INSERT INTO users(name,first_name,last_name,username,email,password_hash) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,name,first_name AS "firstName",last_name AS "lastName",username,email',
+        'INSERT INTO users(name,first_name,last_name,username,email,password_hash) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,name,first_name AS "firstName",last_name AS "lastName",username,email,session_version',
         [name, firstName, lastName, username, email.toLowerCase(), `${salt}:${hash}`]
       )
       const user = rows[0]
-      res.setHeader(
-        'Set-Cookie',
-        `${COOKIE}=${sign({ sub: user.id, exp: Date.now() + SESSION_DAYS * 86400000 })}; ${cookieOptions()}`
-      )
-      res.status(201).json({ user })
+      const publicUser = {
+        id: user.id,
+        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        username: user.username,
+        email: user.email,
+      }
+      res.setHeader('Set-Cookie', sessionCookie(user))
+      res.status(201).json({ user: publicUser })
     } catch (error) {
       if (error.code === '23505') {
         if (error.constraint === 'users_username_lower_unique_idx')
@@ -158,12 +225,13 @@ app.post(
 )
 app.post(
   '/api/auth/login',
+  loginRateLimit,
   asyncRoute(async (req, res) => {
     const input = credentials.safeParse(req.body)
     if (!input.success)
       return res.status(400).json({ error: 'Adresse e-mail ou mot de passe invalide.' })
     const { rows } = await pool.query(
-      'SELECT id,name,first_name AS "firstName",last_name AS "lastName",username,email,password_hash FROM users WHERE email=$1',
+      'SELECT id,name,first_name AS "firstName",last_name AS "lastName",username,email,password_hash,session_version FROM users WHERE email=$1',
       [input.data.email.toLowerCase()]
     )
     const user = rows[0]
@@ -174,10 +242,7 @@ app.post(
       Buffer.from(stored, 'hex').length === candidate.length &&
       crypto.timingSafeEqual(Buffer.from(stored, 'hex'), candidate)
     if (!valid) return res.status(401).json({ error: 'Adresse e-mail ou mot de passe incorrect.' })
-    res.setHeader(
-      'Set-Cookie',
-      `${COOKIE}=${sign({ sub: user.id, exp: Date.now() + SESSION_DAYS * 86400000 })}; ${cookieOptions()}`
-    )
+    res.setHeader('Set-Cookie', sessionCookie(user))
     res.json({
       user: {
         id: user.id,
@@ -193,6 +258,7 @@ app.post(
 app.post(
   '/api/auth/change-password',
   requireAuth,
+  passwordChangeRateLimit,
   asyncRoute(async (req, res) => {
     const input = z
       .object({
@@ -214,10 +280,15 @@ app.post(
     }
     const newSalt = crypto.randomBytes(16).toString('hex')
     const newHash = (await scrypt(input.data.newPassword, newSalt, 64)).toString('hex')
-    await pool.query('UPDATE users SET password_hash=$2 WHERE id=$1', [
-      req.userId,
-      `${newSalt}:${newHash}`,
-    ])
+    const updated = await pool.query(
+      'UPDATE users SET password_hash=$2,session_version=session_version+1 WHERE id=$1 AND session_version=$3 RETURNING session_version',
+      [req.userId, `${newSalt}:${newHash}`, req.sessionVersion]
+    )
+    if (!updated.rows[0]) return res.status(401).json({ error: 'Session invalide.' })
+    res.setHeader(
+      'Set-Cookie',
+      sessionCookie({ id: req.userId, session_version: updated.rows[0].session_version })
+    )
     res.json({ message: 'Mot de passe modifié avec succès.' })
   })
 )
@@ -258,6 +329,7 @@ app.patch(
 app.delete(
   '/api/auth/account',
   requireAuth,
+  accountDeletionRateLimit,
   asyncRoute(async (req, res) => {
     const input = z.object({ password: z.string().min(1).max(128) }).safeParse(req.body)
     if (!input.success)
@@ -285,14 +357,24 @@ app.delete(
     } finally {
       client.release()
     }
-    res.setHeader('Set-Cookie', `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`)
+    res.setHeader('Set-Cookie', `${COOKIE}=; ${clearCookieOptions()}`)
     res.status(204).end()
   })
 )
-app.post('/api/auth/logout', (req, res) => {
-  res.setHeader('Set-Cookie', `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`)
-  res.status(204).end()
-})
+app.post(
+  '/api/auth/logout',
+  asyncRoute(async (req, res) => {
+    const session = verify(parseCookies(req.headers.cookie)[COOKIE])
+    if (session && z.string().uuid().safeParse(session.sub).success) {
+      await pool.query(
+        'UPDATE users SET session_version=session_version+1 WHERE id=$1 AND session_version=$2',
+        [session.sub, session.sessionVersion]
+      )
+    }
+    res.setHeader('Set-Cookie', `${COOKIE}=; ${clearCookieOptions()}`)
+    res.status(204).end()
+  })
+)
 app.get(
   '/api/auth/me',
   requireAuth,
@@ -456,6 +538,8 @@ app.patch(
   '/api/projects/:id/members/:memberId',
   requireAuth,
   asyncRoute(async (req, res) => {
+    const memberId = z.string().uuid().safeParse(req.params.memberId)
+    if (!memberId.success) return res.status(400).json({ error: 'Identifiant du membre invalide.' })
     const input = z.object({ role: projectRole }).safeParse(req.body)
     if (!input.success) return res.status(400).json({ error: 'Rôle invalide.' })
     const { rows } = await pool.query(
@@ -463,7 +547,7 @@ app.patch(
       [
         req.userId,
         req.params.id,
-        req.params.memberId,
+        memberId.data,
         input.data.role,
         input.data.role !== 'lecteur',
         input.data.role === 'editeur',
@@ -477,9 +561,11 @@ app.delete(
   '/api/projects/:id/members/:memberId',
   requireAuth,
   asyncRoute(async (req, res) => {
+    const memberId = z.string().uuid().safeParse(req.params.memberId)
+    if (!memberId.success) return res.status(400).json({ error: 'Identifiant du membre invalide.' })
     const { rowCount } = await pool.query(
       'DELETE FROM project_members WHERE owner_user_id=$1 AND project_id=$2 AND member_user_id=$3',
-      [req.userId, req.params.id, req.params.memberId]
+      [req.userId, req.params.id, memberId.data]
     )
     if (!rowCount) return res.status(404).json({ error: 'Membre du projet introuvable.' })
     res.status(204).end()
@@ -635,7 +721,9 @@ if (require.main === module) {
       app.listen(port, () => console.log(`API Nexa disponible sur http://localhost:${port}`))
     })
     .catch((error) => {
-      console.error('Initialisation PostgreSQL impossible:', error)
+      console.error(
+        'Connexion ou initialisation PostgreSQL impossible. Vérifie la configuration locale.'
+      )
       process.exit(1)
     })
 }

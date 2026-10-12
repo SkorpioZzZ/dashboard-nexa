@@ -1,7 +1,10 @@
 const { spawn } = require('node:child_process')
+const path = require('node:path')
 
 const children = []
 let stopping = false
+const projectRoot = path.join(__dirname, '..')
+const serverRoot = path.join(projectRoot, 'server')
 
 function stopAll(code = 0) {
   if (stopping) return
@@ -35,14 +38,39 @@ function startServices() {
   console.log('Pour tout arrêter, faites Ctrl+C dans ce terminal.\n')
 }
 
+function checkDatabaseConnection() {
+  const check = spawn(process.execPath, ['scripts/check-database.js'], {
+    cwd: serverRoot,
+    stdio: 'inherit',
+  })
+  children.push(check)
+  check.on('error', () => {
+    console.error('Impossible de vérifier la connexion à PostgreSQL.')
+    stopAll(1)
+  })
+  check.on('exit', (code) => {
+    if (stopping) return
+    if (code !== 0) {
+      console.error('L’API et le dashboard ne seront pas démarrés.')
+      stopAll(code || 1)
+      return
+    }
+    startServices()
+  })
+}
+
 process.on('SIGINT', () => stopAll(0))
 process.on('SIGTERM', () => stopAll(0))
 
 console.log('Démarrage de PostgreSQL…')
-const database = spawn('docker', ['compose', 'up', '-d', 'postgres'], { stdio: 'inherit' })
+const database = spawn('docker', ['compose', 'up', '-d', '--wait', 'postgres'], {
+  cwd: projectRoot,
+  stdio: 'inherit',
+})
+children.push(database)
 database.on('error', (error) => {
   console.error(
-    `Impossible de démarrer PostgreSQL : ${error.message}. Installe et démarre Docker, puis relance « npm run dev ».`
+    `Impossible de démarrer PostgreSQL : ${error.message}. Vérifie que Docker est installé et démarré.`
   )
   stopAll(1)
 })
@@ -55,39 +83,5 @@ database.on('exit', (code) => {
     stopAll(code || 1)
     return
   }
-  // A reused Docker volume keeps its original PostgreSQL password even if
-  // docker-compose.yml changes. Set it to the local compose credential without
-  // touching any database contents.
-  const credentials = spawn(
-    'docker',
-    [
-      'compose',
-      'exec',
-      '-T',
-      '-u',
-      'postgres',
-      'postgres',
-      'psql',
-      '-U',
-      'postgres',
-      '-d',
-      'postgres',
-      '-c',
-      "ALTER ROLE postgres WITH PASSWORD 'postgres'",
-    ],
-    { stdio: 'inherit' }
-  )
-  credentials.on('error', (error) => {
-    console.error(`Impossible de configurer l’accès local à PostgreSQL : ${error.message}`)
-    stopAll(1)
-  })
-  credentials.on('exit', (passwordCode) => {
-    if (stopping) return
-    if (passwordCode !== 0) {
-      console.error('Impossible de configurer le mot de passe local de PostgreSQL.')
-      stopAll(passwordCode || 1)
-      return
-    }
-    startServices()
-  })
+  checkDatabaseConnection()
 })

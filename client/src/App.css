@@ -1,4 +1,10 @@
 :root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
   --ink: #252436;
   --muted: #87869a;
   --line: #e9e8f0;
@@ -71,6 +77,8 @@
 .main-nav {
   margin-top: 64px;
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 .nav-caption {
   display: block;
@@ -104,10 +112,19 @@
   font-weight: 600;
 }
 .nav-icon {
-  font-size: 17px;
-  line-height: 16px;
-  width: 16px;
-  text-align: center;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+.nav-icon svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .sidebar-bottom > .nav-link {
   margin-bottom: 20px;
@@ -226,6 +243,9 @@
   line-height: 10px;
 }
 .page-content {
+  display: grid;
+  align-content: start;
+  gap: var(--space-5);
   max-width: 1200px;
   margin: 0 auto;
   padding: 29px 5.5% 50px;
@@ -233,8 +253,8 @@
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 15px;
-  margin-bottom: 22px;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
 }
 .stat-card {
   display: flex;
@@ -295,20 +315,20 @@
 .content-grid {
   display: grid;
   grid-template-columns: 1.25fr 0.75fr;
-  gap: 20px;
-  margin-bottom: 22px;
+  gap: var(--space-5);
+  margin-bottom: var(--space-5);
 }
 .panel {
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 21px 21px 13px;
+  padding: var(--space-5) var(--space-5) var(--space-3);
 }
 .panel-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 18px;
+  margin-bottom: var(--space-4);
 }
 .panel h2 {
   font: 600 15px 'Space Grotesk';
@@ -1024,14 +1044,15 @@
     white-space: nowrap;
   }
   .page-content {
+    gap: var(--space-4);
     padding: 18px 14px 35px;
   }
   .stats-grid {
-    gap: 8px;
+    gap: var(--space-2);
   }
   .stat-card {
     padding: 11px 9px;
-    gap: 8px;
+    gap: var(--space-2);
   }
   .stat-icon {
     width: 32px;

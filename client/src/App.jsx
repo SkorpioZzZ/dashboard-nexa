@@ -1,20 +1,19 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { api } from './lib/api.js'
 import { readSaved } from './lib/storage.js'
+import { useWorkspaceData } from './hooks/useWorkspaceData.js'
 import { Sidebar } from './components/shared.jsx'
 import { AuthPage } from './pages/AuthPage.jsx'
-import {
-  CalendarPage,
-  DashboardPage,
-  EmailPage,
-  ProjectPage,
-  ProjectsPage,
-  SettingsPage,
-  ShortcutsPage,
-  TasksPage,
-  TeamPage,
-} from './pages/WorkspacePages.jsx'
+import { CalendarPage } from './pages/CalendarPage.jsx'
+import { DashboardPage } from './pages/DashboardPage.jsx'
+import { EmailPage } from './pages/EmailPage.jsx'
+import { ProjectPage } from './pages/ProjectPage.jsx'
+import { ProjectsPage } from './pages/ProjectsPage.jsx'
+import { SettingsPage } from './pages/SettingsPage.jsx'
+import { ShortcutsPage } from './pages/ShortcutsPage.jsx'
+import { TasksPage } from './pages/TasksPage.jsx'
+import { TeamPage } from './pages/TeamPage.jsx'
 import './App.css'
 import './kanban.css'
 import './management.css'
@@ -30,20 +29,19 @@ function LoadingScreen() {
 export default function App() {
   const [user, setUser] = useState(null)
   const [ready, setReady] = useState(false)
-  const [projects, setProjects] = useState([])
-  const [tasks, setTasks] = useState([])
-  const [activity, setActivity] = useState([])
-
-  const refreshWorkspace = useCallback(async () => {
-    const [nextProjects, nextTasks, nextActivity] = await Promise.all([
-      api('/projects'),
-      api('/tasks'),
-      api('/activity'),
-    ])
-    setProjects(nextProjects)
-    setTasks(nextTasks)
-    setActivity(nextActivity)
-  }, [])
+  const {
+    projects,
+    tasks,
+    activity,
+    refreshWorkspace,
+    clearWorkspace,
+    createProject,
+    updateProject,
+    deleteProject,
+    createTask,
+    updateTask,
+    deleteTask,
+  } = useWorkspaceData()
 
   useEffect(() => {
     let active = true
@@ -73,54 +71,8 @@ export default function App() {
   const signOut = async () => {
     await api('/auth/logout', { method: 'POST' })
     setUser(null)
-    setProjects([])
-    setTasks([])
-    setActivity([])
+    clearWorkspace()
   }
-
-  const run = async (operation) => {
-    try {
-      const result = await operation()
-      await refreshWorkspace()
-      return result ?? true
-    } catch (error) {
-      window.alert(error.message)
-      return null
-    }
-  }
-
-  const createProject = (project) =>
-    run(() =>
-      api('/projects', {
-        method: 'POST',
-        body: JSON.stringify(project),
-      })
-    )
-  const updateProject = (id, changes) =>
-    run(() =>
-      api(`/projects/${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify(changes),
-      })
-    )
-  const deleteProject = (id) =>
-    run(() => api(`/projects/${encodeURIComponent(id)}`, { method: 'DELETE' }))
-  const createTask = (task) =>
-    run(() =>
-      api('/tasks', {
-        method: 'POST',
-        body: JSON.stringify(task),
-      })
-    )
-  const updateTask = (id, changes) =>
-    run(() =>
-      api(`/tasks/${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify(changes),
-      })
-    )
-  const deleteTask = (id) =>
-    run(() => api(`/tasks/${encodeURIComponent(id)}`, { method: 'DELETE' }))
 
   if (!ready) return <LoadingScreen />
   if (!user) return <AuthPage onSubmit={signIn} />
@@ -147,7 +99,14 @@ export default function App() {
               path="/"
               element={
                 settings.defaultPage === '/' ? (
-                  <DashboardPage projects={projects} tasks={tasks} activity={activity} />
+                  <DashboardPage
+                    projects={projects}
+                    tasks={tasks}
+                    activity={activity}
+                    user={user}
+                    onCreateProject={createProject}
+                    onDeleteProject={deleteProject}
+                  />
                 ) : (
                   <Navigate to={settings.defaultPage} replace />
                 )

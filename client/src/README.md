@@ -2,7 +2,7 @@
 
 ## Démarrage
 
-`main.jsx` monte React dans `index.html` et active le service worker en production. `App.jsx` gère la session, charge les données depuis l’API et déclare les routes. Les écrans sont regroupés dans `pages/WorkspacePages.jsx` ; l’inscription et la connexion sont dans `pages/AuthPage.jsx`.
+`main.jsx` monte React dans `index.html` et active le service worker en production. `App.jsx` gère la session, charge les données depuis l’API et déclare les routes. Chaque écran connecté possède son fichier dans `pages/` ; l’inscription et la connexion sont dans `pages/AuthPage.jsx`.
 
 ## Modules
 

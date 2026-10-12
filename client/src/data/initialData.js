@@ -22,5 +22,6 @@ export const navItems = [
   { to: '/taches', label: 'Tâches', icon: 'check-square' }, { to: '/equipe', label: 'Équipe', icon: 'users' },
   { to: '/calendrier', label: 'Calendrier', icon: 'calendar' }, { to: '/email', label: 'Email', icon: 'mail' },
   { to: '/raccourcis', label: 'Raccourcis', icon: 'external' },
+  { to: '/activite', label: 'Historique', icon: 'history' },
 ]
 // Petits composants communs : icônes, navigation, avatars et indicateurs.

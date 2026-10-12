@@ -3,8 +3,8 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/dev.js",
-    "format": "prettier --write \"client/src/**/*.{js,jsx,css}\" \"client/vite.config.js\" \"client/public/sw.js\" \"server/src/**/*.js\" \"scripts/**/*.js\"",
-    "format:check": "prettier --check \"client/src/**/*.{js,jsx,css}\" \"client/vite.config.js\" \"client/public/sw.js\" \"server/src/**/*.js\" \"scripts/**/*.js\""
+    "format": "prettier --write \"client/src/**/*.{js,jsx,css}\" \"client/vite.config.js\" \"client/public/sw.js\" \"server/src/**/*.js\" \"server/test/**/*.js\" \"server/jest.config.js\" \"server/scripts/**/*.js\" \"scripts/**/*.js\" \"docker-compose.test.yml\"",
+    "format:check": "prettier --check \"client/src/**/*.{js,jsx,css}\" \"client/vite.config.js\" \"client/public/sw.js\" \"server/src/**/*.js\" \"server/test/**/*.js\" \"server/jest.config.js\" \"server/scripts/**/*.js\" \"scripts/**/*.js\" \"docker-compose.test.yml\""
   },
   "devDependencies": {
     "prettier": "^3.9.10"

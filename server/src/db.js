@@ -9,7 +9,8 @@ async function initializeDatabase() {
       name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      session_version INTEGER NOT NULL DEFAULT 1
     );
     CREATE TABLE IF NOT EXISTS projects (
       id TEXT NOT NULL,
@@ -56,7 +57,15 @@ async function initializeDatabase() {
       action TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    CREATE TABLE IF NOT EXISTS rate_limit_buckets (
+      bucket_key TEXT PRIMARY KEY,
+      window_id BIGINT NOT NULL,
+      request_count BIGINT NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
     CREATE INDEX IF NOT EXISTS activity_events_user_created_idx ON activity_events(user_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS rate_limit_buckets_expiry_idx ON rate_limit_buckets(expires_at);
     CREATE INDEX IF NOT EXISTS tasks_user_project_idx ON tasks(user_id, project_id);
     CREATE INDEX IF NOT EXISTS project_members_member_idx ON project_members(member_user_id);
     ALTER TABLE project_members ADD COLUMN IF NOT EXISTS can_create_tasks BOOLEAN NOT NULL DEFAULT false;
@@ -67,6 +76,7 @@ async function initializeDatabase() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 1;
     UPDATE users SET
       first_name = COALESCE(NULLIF(first_name, ''), split_part(name, ' ', 1)),
       last_name = COALESCE(NULLIF(last_name, ''), NULLIF(trim(substr(name, length(split_part(name, ' ', 1)) + 1)), '')),
