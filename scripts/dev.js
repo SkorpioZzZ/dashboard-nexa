@@ -41,24 +41,42 @@ process.on('SIGTERM', () => stopAll(0))
 console.log('Démarrage de PostgreSQL…')
 const database = spawn('docker', ['compose', 'up', '-d', 'postgres'], { stdio: 'inherit' })
 database.on('error', (error) => {
-  console.error(`Impossible de démarrer PostgreSQL : ${error.message}. Installe et démarre Docker, puis relance « npm run dev ».`)
+  console.error(
+    `Impossible de démarrer PostgreSQL : ${error.message}. Installe et démarre Docker, puis relance « npm run dev ».`
+  )
   stopAll(1)
 })
 database.on('exit', (code) => {
   if (stopping) return
   if (code !== 0) {
-    console.error('Docker n’a pas pu démarrer PostgreSQL. Vérifie que Docker est installé et démarré.')
+    console.error(
+      'Docker n’a pas pu démarrer PostgreSQL. Vérifie que Docker est installé et démarré.'
+    )
     stopAll(code || 1)
     return
   }
   // A reused Docker volume keeps its original PostgreSQL password even if
   // docker-compose.yml changes. Set it to the local compose credential without
   // touching any database contents.
-  const credentials = spawn('docker', [
-    'compose', 'exec', '-T', '-u', 'postgres', 'postgres',
-    'psql', '-U', 'postgres', '-d', 'postgres',
-    '-c', "ALTER ROLE postgres WITH PASSWORD 'postgres'",
-  ], { stdio: 'inherit' })
+  const credentials = spawn(
+    'docker',
+    [
+      'compose',
+      'exec',
+      '-T',
+      '-u',
+      'postgres',
+      'postgres',
+      'psql',
+      '-U',
+      'postgres',
+      '-d',
+      'postgres',
+      '-c',
+      "ALTER ROLE postgres WITH PASSWORD 'postgres'",
+    ],
+    { stdio: 'inherit' }
+  )
   credentials.on('error', (error) => {
     console.error(`Impossible de configurer l’accès local à PostgreSQL : ${error.message}`)
     stopAll(1)

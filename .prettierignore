@@ -1,0 +1,26 @@
+# Dependencies and generated output
+node_modules/
+**/node_modules/
+dist/
+build/
+coverage/
+
+# Git metadata and local environment files
+.git/
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Package-manager lock files
+package-lock.json
+npm-shrinkwrap.json
+yarn.lock
+pnpm-lock.yaml
+
+# Static data is intentionally kept unchanged during this formatting step
+client/src/data/
+
+# Generated and minified files
+*.min.js
+*.min.css

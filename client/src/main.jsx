@@ -4,9 +4,15 @@ import './index.css'
 
 if ('serviceWorker' in navigator) {
   if (import.meta.env.PROD) {
-    window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch((error) => console.error('Service worker indisponible', error)))
+    window.addEventListener('load', () =>
+      navigator.serviceWorker
+        .register('/sw.js')
+        .catch((error) => console.error('Service worker indisponible', error))
+    )
   } else {
-    navigator.serviceWorker.getRegistrations().then((registrations) => registrations.forEach((registration) => registration.unregister()))
+    navigator.serviceWorker
+      .getRegistrations()
+      .then((registrations) => registrations.forEach((registration) => registration.unregister()))
   }
 }
 import App from './App.jsx'
@@ -14,5 +20,5 @@ import App from './App.jsx'
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <App />
-  </StrictMode>,
+  </StrictMode>
 )

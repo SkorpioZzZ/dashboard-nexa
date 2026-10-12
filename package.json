@@ -2,6 +2,11 @@
   "name": "dashboard-suivi-projet",
   "private": true,
   "scripts": {
-    "dev": "node scripts/dev.js"
+    "dev": "node scripts/dev.js",
+    "format": "prettier --write \"client/src/**/*.{js,jsx,css}\" \"client/vite.config.js\" \"client/public/sw.js\" \"server/src/**/*.js\" \"scripts/**/*.js\"",
+    "format:check": "prettier --check \"client/src/**/*.{js,jsx,css}\" \"client/vite.config.js\" \"client/public/sw.js\" \"server/src/**/*.js\" \"scripts/**/*.js\""
+  },
+  "devDependencies": {
+    "prettier": "^3.9.10"
   }
 }
