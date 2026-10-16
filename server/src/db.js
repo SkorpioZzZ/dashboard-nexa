@@ -48,6 +48,16 @@ async function initializeDatabase() {
       PRIMARY KEY (owner_user_id, project_id, member_user_id),
       FOREIGN KEY (owner_user_id, project_id) REFERENCES projects(user_id, id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS team_members (
+      owner_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      member_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role TEXT NOT NULL DEFAULT 'Membre',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (owner_user_id, member_user_id),
+      CHECK (owner_user_id <> member_user_id)
+    );
+
     CREATE TABLE IF NOT EXISTS activity_events (
       id BIGSERIAL PRIMARY KEY,
       user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -68,6 +78,7 @@ async function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS rate_limit_buckets_expiry_idx ON rate_limit_buckets(expires_at);
     CREATE INDEX IF NOT EXISTS tasks_user_project_idx ON tasks(user_id, project_id);
     CREATE INDEX IF NOT EXISTS project_members_member_idx ON project_members(member_user_id);
+    CREATE INDEX IF NOT EXISTS team_members_member_idx ON team_members(member_user_id);
     ALTER TABLE project_members ADD COLUMN IF NOT EXISTS can_create_tasks BOOLEAN NOT NULL DEFAULT false;
     ALTER TABLE project_members ADD COLUMN IF NOT EXISTS can_edit_tasks BOOLEAN NOT NULL DEFAULT false;
     ALTER TABLE project_members ADD COLUMN IF NOT EXISTS can_delete_tasks BOOLEAN NOT NULL DEFAULT false;

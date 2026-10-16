@@ -390,6 +390,116 @@ app.get(
 )
 
 app.get(
+  '/api/team',
+  requireAuth,
+  asyncRoute(async (req, res) => {
+    const { rows } = await pool.query(
+      `SELECT tm.member_user_id AS id,
+              u.name,
+              u.email,
+              tm.role,
+              tm.created_at AS "createdAt"
+       FROM team_members tm
+       JOIN users u ON u.id = tm.member_user_id
+       WHERE tm.owner_user_id = $1
+       ORDER BY u.name`,
+      [req.userId]
+    )
+    res.json(rows)
+  })
+)
+
+app.post(
+  '/api/team',
+  requireAuth,
+  asyncRoute(async (req, res) => {
+    const input = z
+      .object({
+        email: z.string().trim().email().max(254),
+        role: z.string().trim().max(80).default('Membre'),
+      })
+      .safeParse(req.body)
+
+    if (!input.success) {
+      return res.status(400).json({
+        error: 'Saisissez une adresse e-mail valide et un rôle de 80 caractères maximum.',
+      })
+    }
+
+    const email = input.data.email.toLowerCase()
+    const role = input.data.role || 'Membre'
+
+    const { rows: users } = await pool.query(
+      'SELECT id, name, email FROM users WHERE lower(email) = lower($1)',
+      [email]
+    )
+
+    const user = users[0]
+
+    if (!user) {
+      return res.status(404).json({
+        error: 'Aucun compte Nexa ne correspond à cette adresse e-mail.',
+      })
+    }
+
+    if (user.id === req.userId) {
+      return res.status(400).json({
+        error: 'Vous ne pouvez pas vous ajouter vous-même à votre équipe.',
+      })
+    }
+
+    const { rows: inserted } = await pool.query(
+      `INSERT INTO team_members (owner_user_id, member_user_id, role)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (owner_user_id, member_user_id) DO NOTHING
+       RETURNING member_user_id AS id, role`,
+      [req.userId, user.id, role]
+    )
+
+    if (!inserted[0]) {
+      return res.status(409).json({
+        error: 'Cette personne est déjà dans votre équipe.',
+      })
+    }
+
+    res.status(201).json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: inserted[0].role,
+    })
+  })
+)
+
+app.delete(
+  '/api/team/:memberId',
+  requireAuth,
+  asyncRoute(async (req, res) => {
+    const memberId = z.string().uuid().safeParse(req.params.memberId)
+
+    if (!memberId.success) {
+      return res.status(400).json({
+        error: 'Identifiant du membre invalide.',
+      })
+    }
+
+    const { rowCount } = await pool.query(
+      `DELETE FROM team_members
+       WHERE owner_user_id = $1 AND member_user_id = $2`,
+      [req.userId, memberId.data]
+    )
+
+    if (!rowCount) {
+      return res.status(404).json({
+        error: 'Membre introuvable dans votre équipe.',
+      })
+    }
+
+    res.status(204).end()
+  })
+)
+
+app.get(
   '/api/projects',
   requireAuth,
   asyncRoute(async (req, res) => {

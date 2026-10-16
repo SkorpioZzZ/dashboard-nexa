@@ -1,97 +1,160 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Avatar, Header } from '../components/shared.jsx'
-import { team as defaultTeam } from '../data/initialData.js'
-import { readSaved } from '../lib/storage.js'
+import { api } from '../lib/api.js'
 
 export function TeamPage() {
-  const [members, setMembers] = useState(() =>
-    readSaved('nexa-team', defaultTeam).map((member, index) => ({
-      ...member,
-      id: member.id || `local-${index}`,
-    }))
-  )
-  const [name, setName] = useState('')
+  const [members, setMembers] = useState([])
   const [email, setEmail] = useState('')
   const [role, setRole] = useState('Membre')
-  function save(event) {
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [removingId, setRemovingId] = useState(null)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+
+    api('/team')
+      .then((data) => {
+        if (!cancelled) setMembers(data)
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  async function save(event) {
     event.preventDefault()
-    const cleanEmail = email.trim().toLowerCase()
-    if (members.some((member) => member.email.toLowerCase() === cleanEmail))
-      return window.alert('Cette adresse e-mail est déjà dans votre équipe.')
-    const cleanName = name.trim()
-    const next = [
-      ...members,
-      {
-        id: `member-${Date.now()}`,
-        name: cleanName,
-        email: cleanEmail,
-        role: role.trim(),
-        initials: cleanName
-          .split(/\s+/)
-          .map((part) => part[0])
-          .slice(0, 2)
-          .join('')
-          .toUpperCase(),
-        color: 'blue',
-      },
-    ]
-    setMembers(next)
-    localStorage.setItem('nexa-team', JSON.stringify(next))
-    setName('')
-    setEmail('')
+    setError('')
+    setSuccess('')
+    setSubmitting(true)
+
+    try {
+      const member = await api('/team', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: email.trim(),
+          role: role.trim() || 'Membre',
+        }),
+      })
+
+      setMembers((current) => [...current, member])
+      setEmail('')
+      setSuccess(`${member.name} a été ajouté à votre équipe.`)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSubmitting(false)
+    }
   }
-  function remove(id) {
-    const next = members.filter((member) => member.id !== id)
-    setMembers(next)
-    localStorage.setItem('nexa-team', JSON.stringify(next))
+
+  async function remove(id) {
+    setError('')
+    setSuccess('')
+    setRemovingId(id)
+
+    try {
+      await api(`/team/${id}`, { method: 'DELETE' })
+      setMembers((current) => current.filter((member) => member.id !== id))
+      setSuccess('Le membre a été retiré de votre équipe.')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setRemovingId(null)
+    }
   }
+
   return (
     <>
       <Header eyebrow="ESPACE DE TRAVAIL" title="Équipe" />
+
       <main className="page-content">
         <section className="panel">
           <div className="panel-header">
             <div>
               <h2>Ajouter une personne</h2>
-              <p>Ce carnet est enregistré dans ce navigateur.</p>
               <p>
-                Les rôles indiqués ici sont informatifs et ne modifient pas les accès aux projets.
+                Saisissez l’adresse e-mail d’un compte Nexa existant pour l’ajouter à votre équipe.
+              </p>
+              <p>
+                Les rôles sont informatifs : ils ne modifient pas les autorisations d’accès aux
+                projets.
               </p>
             </div>
           </div>
+
           <form className="shortcut-form" onSubmit={save}>
             <label>
-              Nom
-              <input value={name} onChange={(event) => setName(event.target.value)} required />
-            </label>
-            <label>
-              E-mail
+              E-mail du compte Nexa
               <input
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
+                placeholder="exemple@domaine.fr"
+                maxLength={254}
                 required
               />
             </label>
+
             <label>
               Rôle informatif
-              <input value={role} onChange={(event) => setRole(event.target.value)} />
+              <input
+                value={role}
+                onChange={(event) => setRole(event.target.value)}
+                maxLength={80}
+                placeholder="Membre"
+              />
             </label>
-            <button className="primary-button">Ajouter</button>
+
+            <button className="primary-button" type="submit" disabled={submitting}>
+              {submitting ? 'Ajout en cours…' : 'Ajouter'}
+            </button>
           </form>
+
+          {error && <p role="alert">{error}</p>}
+          {success && <p>{success}</p>}
         </section>
+
         <div className="team-grid">
-          {members.map((member) => (
-            <article className="team-card" key={member.id}>
-              <Avatar initials={member.initials} color={member.color} />
-              <h2>{member.name}</h2>
-              <p>{member.role}</p>
-              <a href={`mailto:${member.email}`}>{member.email}</a>
-              <button className="team-remove-button" onClick={() => remove(member.id)}>
-                Retirer
-              </button>
-            </article>
-          ))}
+          {loading ? (
+            <p>Chargement de l’équipe…</p>
+          ) : members.length === 0 ? (
+            <p>Aucun membre dans votre équipe. Ajoutez un compte Nexa ci-dessus.</p>
+          ) : (
+            members.map((member) => {
+              const initials = member.name
+                .split(/\s+/)
+                .map((part) => part[0])
+                .slice(0, 2)
+                .join('')
+                .toUpperCase()
+
+              return (
+                <article className="team-card" key={member.id}>
+                  <Avatar initials={initials} color="blue" />
+                  <h2>{member.name}</h2>
+                  <p>{member.role}</p>
+                  <a href={`mailto:${member.email}`}>{member.email}</a>
+                  <button
+                    className="team-remove-button"
+                    type="button"
+                    disabled={removingId === member.id}
+                    onClick={() => remove(member.id)}
+                  >
+                    {removingId === member.id ? 'Retrait…' : 'Retirer'}
+                  </button>
+                </article>
+              )
+            })
+          )}
         </div>
       </main>
     </>
