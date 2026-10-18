@@ -2,6 +2,15 @@ import { useEffect, useState } from 'react'
 import { Avatar, Header } from '../components/shared.jsx'
 import { api } from '../lib/api.js'
 
+const TEAM_ROLES = [
+  'Administrateur',
+  'Responsable',
+  'Développeur',
+  'Contributeur',
+  'Lecteur',
+  'Membre',
+]
+
 export function TeamPage() {
   const [members, setMembers] = useState([])
   const [email, setEmail] = useState('')
@@ -9,6 +18,7 @@ export function TeamPage() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [removingId, setRemovingId] = useState(null)
+  const [updatingRoleId, setUpdatingRoleId] = useState(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
@@ -42,17 +52,43 @@ export function TeamPage() {
         method: 'POST',
         body: JSON.stringify({
           email: email.trim(),
-          role: role.trim() || 'Membre',
+          role,
         }),
       })
 
       setMembers((current) => [...current, member])
       setEmail('')
+      setRole('Membre')
       setSuccess(`${member.name} a été ajouté à votre équipe.`)
     } catch (err) {
       setError(err.message)
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  async function updateRole(member, newRole) {
+    if (member.role === newRole) return
+
+    setError('')
+    setSuccess('')
+    setUpdatingRoleId(member.id)
+
+    try {
+      const updated = await api(`/team/${member.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ role: newRole }),
+      })
+
+      setMembers((current) =>
+        current.map((item) => (item.id === member.id ? { ...item, role: updated.role } : item))
+      )
+
+      setSuccess(`Le rôle de ${member.name} a été modifié.`)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setUpdatingRoleId(null)
     }
   }
 
@@ -76,7 +112,7 @@ export function TeamPage() {
     <>
       <Header eyebrow="ESPACE DE TRAVAIL" title="Équipe" />
 
-      <main className="page-content">
+      <main className="page-content team-page">
         <section className="panel">
           <div className="panel-header">
             <div>
@@ -105,13 +141,14 @@ export function TeamPage() {
             </label>
 
             <label>
-              Rôle informatif
-              <input
-                value={role}
-                onChange={(event) => setRole(event.target.value)}
-                maxLength={80}
-                placeholder="Membre"
-              />
+              Rôle
+              <select value={role} onChange={(event) => setRole(event.target.value)}>
+                {TEAM_ROLES.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <button className="primary-button" type="submit" disabled={submitting}>
@@ -119,8 +156,16 @@ export function TeamPage() {
             </button>
           </form>
 
-          {error && <p role="alert">{error}</p>}
-          {success && <p>{success}</p>}
+          {error && (
+            <p className="team-feedback team-feedback-error" role="alert">
+              {error}
+            </p>
+          )}
+          {success && (
+            <p className="team-feedback team-feedback-success" role="status">
+              {success}
+            </p>
+          )}
         </section>
 
         <div className="team-grid">
@@ -137,16 +182,39 @@ export function TeamPage() {
                 .join('')
                 .toUpperCase()
 
+              const knownRole = member.role || 'Membre'
+
               return (
                 <article className="team-card" key={member.id}>
                   <Avatar initials={initials} color="blue" />
                   <h2>{member.name}</h2>
-                  <p>{member.role}</p>
+
+                  <label>
+                    Rôle
+                    <select
+                      value={knownRole}
+                      disabled={updatingRoleId === member.id || removingId === member.id}
+                      onChange={(event) => updateRole(member, event.target.value)}
+                    >
+                      {!TEAM_ROLES.includes(knownRole) && (
+                        <option value={knownRole}>{knownRole}</option>
+                      )}
+                      {TEAM_ROLES.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {updatingRoleId === member.id && <p>Enregistrement du rôle…</p>}
+
                   <a href={`mailto:${member.email}`}>{member.email}</a>
+
                   <button
                     className="team-remove-button"
                     type="button"
-                    disabled={removingId === member.id}
+                    disabled={removingId === member.id || updatingRoleId === member.id}
                     onClick={() => remove(member.id)}
                   >
                     {removingId === member.id ? 'Retrait…' : 'Retirer'}

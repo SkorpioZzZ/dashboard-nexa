@@ -1092,3 +1092,228 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ===== Page Équipe ===== */
+
+.team-page {
+  display: grid;
+  gap: 24px;
+}
+
+.team-page > .panel {
+  border-radius: 12px;
+}
+
+.team-page > .panel .panel-header {
+  margin-bottom: 18px;
+}
+
+.team-page > .panel .panel-header p {
+  max-width: 760px;
+  line-height: 1.65;
+}
+
+.team-page .shortcut-form {
+  align-items: end;
+  gap: 16px;
+}
+
+.team-page .shortcut-form label,
+.team-page .team-card label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.team-page .shortcut-form input,
+.team-page select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font:
+    400 12px 'DM Sans',
+    sans-serif;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.team-page .shortcut-form input:hover,
+.team-page select:hover {
+  border-color: #c8c4e5;
+}
+
+.team-page .shortcut-form input:focus-visible,
+.team-page select:focus-visible {
+  outline: none;
+  border-color: #a49af7;
+  box-shadow: 0 0 0 3px #7667ed25;
+}
+
+.team-page select:disabled {
+  background: #f4f3f8;
+  color: #9997a5;
+  cursor: wait;
+}
+
+.team-page .shortcut-form .primary-button {
+  min-height: 40px;
+  white-space: nowrap;
+}
+
+.team-page .team-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  align-items: stretch;
+}
+
+.team-page .team-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.team-page .team-card:hover {
+  border-color: #d8d3f2;
+  box-shadow: 0 8px 24px rgb(42 35 90 / 6%);
+  transform: translateY(-2px);
+}
+
+.team-page .team-card h2 {
+  margin: 2px 0 0;
+  color: var(--ink);
+  font:
+    600 14px 'Space Grotesk',
+    sans-serif;
+  overflow-wrap: anywhere;
+}
+
+.team-page .team-card label {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.team-page .team-card a {
+  max-width: 100%;
+  color: var(--purple);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.team-page .team-card a:hover {
+  text-decoration: underline;
+}
+
+.team-page .team-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.team-page .team-card .team-remove-button {
+  align-self: flex-end;
+  margin-top: auto;
+  padding: 8px 11px;
+  border: 1px solid #f0d6d8;
+  border-radius: 7px;
+  background: #fff;
+  color: #b54750;
+  font:
+    500 11px 'DM Sans',
+    sans-serif;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.team-page .team-card .team-remove-button:hover:not(:disabled) {
+  border-color: #e8b9bd;
+  background: #fff5f5;
+}
+
+.team-page .team-card .team-remove-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.team-page .team-feedback {
+  margin: 14px 0 0;
+  padding: 11px 13px;
+  border: 1px solid;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.team-page .team-feedback-error {
+  border-color: #f0d0d2;
+  background: #fff5f5;
+  color: #a63842;
+}
+
+.team-page .team-feedback-success {
+  border-color: #cce9d8;
+  background: #f2fbf5;
+  color: #247749;
+}
+
+@media (max-width: 1050px) {
+  .team-page .team-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .team-page .team-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .team-page .shortcut-form {
+    grid-template-columns: 1fr;
+  }
+
+  .team-page .shortcut-form .primary-button {
+    width: 100%;
+  }
+
+  .team-page > .panel {
+    padding: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .team-page .team-card,
+  .team-page select,
+  .team-page .shortcut-form input,
+  .team-page .team-remove-button {
+    transition: none;
+  }
+
+  .team-page .team-card:hover {
+    transform: none;
+  }
+}

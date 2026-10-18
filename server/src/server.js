@@ -471,6 +471,56 @@ app.post(
   })
 )
 
+app.patch(
+  '/api/team/:memberId',
+  requireAuth,
+  asyncRoute(async (req, res) => {
+    const memberId = z.string().uuid().safeParse(req.params.memberId)
+
+    const input = z
+      .object({
+        role: z.enum([
+          'Administrateur',
+          'Responsable',
+          'Développeur',
+          'Contributeur',
+          'Lecteur',
+          'Membre',
+        ]),
+      })
+      .safeParse(req.body)
+
+    if (!memberId.success) {
+      return res.status(400).json({
+        error: 'Identifiant du membre invalide.',
+      })
+    }
+
+    if (!input.success) {
+      return res.status(400).json({
+        error: 'Le rôle sélectionné est invalide.',
+      })
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE team_members
+       SET role = $3
+       WHERE owner_user_id = $1
+         AND member_user_id = $2
+       RETURNING member_user_id AS id, role`,
+      [req.userId, memberId.data, input.data.role]
+    )
+
+    if (!rows[0]) {
+      return res.status(404).json({
+        error: 'Membre introuvable dans votre équipe.',
+      })
+    }
+
+    res.json(rows[0])
+  })
+)
+
 app.delete(
   '/api/team/:memberId',
   requireAuth,
