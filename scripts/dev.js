@@ -63,10 +63,14 @@ process.on('SIGINT', () => stopAll(0))
 process.on('SIGTERM', () => stopAll(0))
 
 console.log('Démarrage de PostgreSQL…')
-const database = spawn('docker', ['compose', 'up', '-d', '--wait', 'postgres'], {
-  cwd: projectRoot,
-  stdio: 'inherit',
-})
+const database = spawn(
+  'docker',
+  ['compose', '-p', 'dashboardsuiviprojet', 'up', '-d', '--wait', 'postgres'],
+  {
+    cwd: projectRoot,
+    stdio: 'inherit',
+  }
+)
 children.push(database)
 database.on('error', (error) => {
   console.error(

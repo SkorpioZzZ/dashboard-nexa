@@ -156,19 +156,41 @@ const taskInput = z.object({
   status: z.enum(['À faire', 'En cours', 'En revue', 'Terminé']).default('À faire'),
   color: z.string().max(32).default('purple'),
 })
-const projectRole = z.enum(['lecteur', 'contributeur', 'editeur'])
+
+const projectRole = z.enum(['lecteur', 'developpeur', 'responsable', 'administrateur'])
 const entityId = z.string().trim().min(1).max(100)
+
 async function hasProjectPermission(userId, projectId, permission) {
   const roles = {
-    can_create_tasks: ['contributeur', 'editeur'],
-    can_edit_tasks: ['contributeur', 'editeur'],
-    can_delete_tasks: ['editeur'],
+    can_view_project: ['lecteur', 'developpeur', 'responsable', 'administrateur'],
+    can_create_tasks: ['developpeur', 'responsable', 'administrateur'],
+    can_edit_tasks: ['developpeur', 'responsable', 'administrateur'],
+    can_delete_tasks: ['responsable', 'administrateur'],
+    can_assign_tasks: ['developpeur', 'responsable', 'administrateur'],
+    can_edit_project: ['responsable', 'administrateur'],
+    can_manage_members: ['responsable', 'administrateur'],
+    can_manage_roles: ['administrateur'],
+    can_delete_project: ['administrateur'],
   }
-  const allowedRoles = roles[permission] || []
+
+  if (!Object.hasOwn(roles, permission)) return false
+
+  const allowedRoles = roles[permission]
+
   const { rows } = await pool.query(
-    `SELECT (p.user_id=$1 OR pm.role=ANY($3::text[])) AS allowed FROM projects p LEFT JOIN project_members pm ON pm.owner_user_id=p.user_id AND pm.project_id=p.id AND pm.member_user_id=$1 WHERE p.id=$2 AND (p.user_id=$1 OR pm.member_user_id=$1)`,
+    `SELECT (
+      p.user_id = $1 OR pm.role = ANY($3::text[])
+    ) AS allowed
+    FROM projects p
+    LEFT JOIN project_members pm
+      ON pm.owner_user_id = p.user_id
+      AND pm.project_id = p.id
+      AND pm.member_user_id = $1
+    WHERE p.id = $2
+      AND (p.user_id = $1 OR pm.member_user_id = $1)`,
     [userId, projectId, allowedRoles]
   )
+
   return rows[0]?.allowed === true
 }
 
@@ -602,58 +624,88 @@ app.post(
     res.status(201).json(rows[0])
   })
 )
+
 app.patch(
   '/api/projects/:id',
   requireAuth,
   asyncRoute(async (req, res) => {
     const input = projectInput.partial().safeParse(req.body)
-    if (!input.success || Object.keys(input.data || {}).length === 0)
+
+    if (!input.success || Object.keys(input.data || {}).length === 0) {
       return res.status(400).json({ error: 'Informations du projet invalides.' })
+    }
+
+    const allowed = await hasProjectPermission(req.userId, req.params.id, 'can_edit_project')
+
+    if (!allowed) {
+      return res.status(403).json({ error: 'Vous n’avez pas le droit de modifier ce projet.' })
+    }
+
     const current = await pool.query(
-      "SELECT id,name,client,description,to_char(due,'YYYY-MM-DD') AS due,color FROM projects WHERE user_id=$1 AND id=$2",
-      [req.userId, req.params.id]
+      "SELECT id,user_id,name,client,description,to_char(due,'YYYY-MM-DD') AS due,color FROM projects WHERE id=$1",
+      [req.params.id]
     )
-    if (!current.rows[0]) return res.status(404).json({ error: 'Projet introuvable.' })
-    const value = { ...current.rows[0], ...input.data }
+
+    if (!current.rows[0]) {
+      return res.status(404).json({ error: 'Projet introuvable.' })
+    }
+
+    const project = current.rows[0]
+    const value = { ...project, ...input.data }
+
     const { rows } = await pool.query(
-      "UPDATE projects SET name=$3,client=$4,description=$5,due=$6,color=$7 WHERE user_id=$1 AND id=$2 RETURNING id,name,client,description,to_char(due,'YYYY-MM-DD') AS due,color",
-      [
-        req.userId,
-        req.params.id,
-        value.name,
-        value.client,
-        value.description,
-        value.due || null,
-        value.color,
-      ]
+      "UPDATE projects SET name=$2,client=$3,description=$4,due=$5,color=$6 WHERE id=$1 RETURNING id,name,client,description,to_char(due,'YYYY-MM-DD') AS due,color",
+      [req.params.id, value.name, value.client, value.description, value.due || null, value.color]
     )
-    await recordActivity(req.userId, req.userId, req.params.id, value.name, 'a modifié le projet')
+
+    await recordActivity(
+      req.userId,
+      project.user_id,
+      req.params.id,
+      value.name,
+      'a modifié le projet'
+    )
+
     res.json(rows[0])
   })
 )
+
 app.delete(
   '/api/projects/:id',
   requireAuth,
   asyncRoute(async (req, res) => {
-    const project = await pool.query('SELECT name FROM projects WHERE user_id=$1 AND id=$2', [
-      req.userId,
+    const allowed = await hasProjectPermission(req.userId, req.params.id, 'can_delete_project')
+
+    if (!allowed) {
+      return res.status(403).json({ error: 'Vous n’avez pas le droit de supprimer ce projet.' })
+    }
+
+    const project = await pool.query('SELECT user_id,name FROM projects WHERE id=$1', [
       req.params.id,
     ])
-    const { rowCount } = await pool.query('DELETE FROM projects WHERE user_id=$1 AND id=$2', [
-      req.userId,
-      req.params.id,
-    ])
-    if (!rowCount) return res.status(404).json({ error: 'Projet introuvable.' })
+
+    if (!project.rows[0]) {
+      return res.status(404).json({ error: 'Projet introuvable.' })
+    }
+
+    const { rowCount } = await pool.query('DELETE FROM projects WHERE id=$1', [req.params.id])
+
+    if (!rowCount) {
+      return res.status(404).json({ error: 'Projet introuvable.' })
+    }
+
     await recordActivity(
       req.userId,
-      req.userId,
+      project.rows[0].user_id,
       req.params.id,
       project.rows[0].name,
       'a supprimé le projet'
     )
+
     res.status(204).end()
   })
 )
+
 app.post(
   '/api/projects/:id/members',
   requireAuth,
@@ -663,8 +715,24 @@ app.post(
       .safeParse(req.body)
     if (!input.success)
       return res.status(400).json({ error: 'Saisissez une adresse e-mail valide.' })
-    const project = await pool.query('SELECT id FROM projects WHERE user_id=$1 AND id=$2', [
-      req.userId,
+    const allowed = await hasProjectPermission(req.userId, req.params.id, 'can_manage_members')
+
+    if (!allowed) {
+      return res.status(403).json({
+        error: 'Vous n’avez pas le droit de gérer les membres de ce projet.',
+      })
+    }
+
+    if (
+      input.data.role !== 'lecteur' &&
+      !(await hasProjectPermission(req.userId, req.params.id, 'can_manage_roles'))
+    ) {
+      return res.status(403).json({
+        error: 'Seul le propriétaire ou un Administrateur peut attribuer ce rôle.',
+      })
+    }
+
+    const project = await pool.query('SELECT id, user_id FROM projects WHERE id=$1', [
       req.params.id,
     ])
     if (!project.rowCount)
@@ -683,13 +751,13 @@ app.post(
     await pool.query(
       'INSERT INTO project_members(owner_user_id,project_id,member_user_id,role,can_create_tasks,can_edit_tasks,can_delete_tasks) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (owner_user_id,project_id,member_user_id) DO UPDATE SET role=$4,can_create_tasks=$5,can_edit_tasks=$6,can_delete_tasks=$7',
       [
-        req.userId,
+        project.rows[0].user_id,
         req.params.id,
         user.rows[0].id,
         input.data.role,
         input.data.role !== 'lecteur',
         input.data.role !== 'lecteur',
-        input.data.role === 'editeur',
+        ['responsable', 'administrateur'].includes(input.data.role),
       ]
     )
     res.status(201).json({ ...user.rows[0], role: input.data.role })
@@ -703,15 +771,26 @@ app.patch(
     if (!memberId.success) return res.status(400).json({ error: 'Identifiant du membre invalide.' })
     const input = z.object({ role: projectRole }).safeParse(req.body)
     if (!input.success) return res.status(400).json({ error: 'Rôle invalide.' })
+    const allowed = await hasProjectPermission(req.userId, req.params.id, 'can_manage_roles')
+
+    if (!allowed) {
+      return res.status(403).json({
+        error: 'Vous n’avez pas le droit de modifier les rôles de ce projet.',
+      })
+    }
+
+    const project = await pool.query('SELECT user_id FROM projects WHERE id=$1', [req.params.id])
+    if (!project.rowCount) return res.status(404).json({ error: 'Projet introuvable.' })
+
     const { rows } = await pool.query(
       'UPDATE project_members SET role=$4,can_create_tasks=$5,can_edit_tasks=$5,can_delete_tasks=$6 WHERE owner_user_id=$1 AND project_id=$2 AND member_user_id=$3 RETURNING role',
       [
-        req.userId,
+        project.rows[0].user_id,
         req.params.id,
         memberId.data,
         input.data.role,
         input.data.role !== 'lecteur',
-        input.data.role === 'editeur',
+        ['responsable', 'administrateur'].includes(input.data.role),
       ]
     )
     if (!rows[0]) return res.status(404).json({ error: 'Membre du projet introuvable.' })
@@ -724,9 +803,24 @@ app.delete(
   asyncRoute(async (req, res) => {
     const memberId = z.string().uuid().safeParse(req.params.memberId)
     if (!memberId.success) return res.status(400).json({ error: 'Identifiant du membre invalide.' })
+
+    const allowed = await hasProjectPermission(req.userId, req.params.id, 'can_manage_members')
+
+    if (!allowed) {
+      return res.status(403).json({
+        error: 'Vous n’avez pas le droit de gérer les membres de ce projet.',
+      })
+    }
+
+    const project = await pool.query('SELECT user_id FROM projects WHERE id=$1', [req.params.id])
+
+    if (!project.rowCount) {
+      return res.status(404).json({ error: 'Projet introuvable.' })
+    }
+
     const { rowCount } = await pool.query(
       'DELETE FROM project_members WHERE owner_user_id=$1 AND project_id=$2 AND member_user_id=$3',
-      [req.userId, req.params.id, memberId.data]
+      [project.rows[0].user_id, req.params.id, memberId.data]
     )
     if (!rowCount) return res.status(404).json({ error: 'Membre du projet introuvable.' })
     res.status(204).end()
@@ -806,6 +900,35 @@ app.patch(
         .status(403)
         .json({ error: 'Vous n’avez pas l’autorisation de modifier les tâches de ce projet.' })
     const value = { ...current.rows[0], ...input.data }
+
+    if (
+      Object.hasOwn(input.data, 'projectId') &&
+      input.data.projectId !== current.rows[0].projectId
+    ) {
+      const destinationProjectId = input.data.projectId
+
+      const canEditDestination = await hasProjectPermission(
+        req.userId,
+        destinationProjectId,
+        'can_edit_tasks'
+      )
+
+      if (!canEditDestination) {
+        return res.status(403).json({
+          error: 'Vous ne pouvez pas déplacer une tâche vers ce projet.',
+        })
+      }
+    }
+
+    if (
+      Object.hasOwn(input.data, 'person') &&
+      !(await hasProjectPermission(req.userId, current.rows[0].projectId, 'can_assign_tasks'))
+    ) {
+      return res.status(403).json({
+        error: 'Vous n’avez pas l’autorisation d’assigner cette tâche.',
+      })
+    }
+
     if (!(await hasProjectPermission(req.userId, value.projectId, 'can_edit_tasks')))
       return res
         .status(403)

@@ -62,8 +62,8 @@ describe('permissions API', () => {
 
   test.each([
     ['reader', 'lecteur'],
-    ['contributor', 'contributeur'],
-    ['editor', 'editeur'],
+    ['contributor', 'developpeur'],
+    ['editor', 'responsable'],
   ])('allows %s to read shared project and task', async (key, role) => {
     const cookie = await loginAs(users[key])
     const projects = await request(app).get('/api/projects').set('Cookie', cookie)
@@ -109,19 +109,33 @@ describe('permissions API', () => {
     expect(response.status).toBe(status)
   })
 
-  test('restricts project modification and deletion to its owner', async () => {
-    for (const key of ['reader', 'contributor', 'editor']) {
+  test('applies project modification and deletion permissions by role', async () => {
+    for (const key of ['reader', 'contributor']) {
       expect(
         (
           await authenticated(users[key], 'patch', `/api/projects/${projectIds.shared}`).send(
             projectBody
           )
         ).status
-      ).toBe(404)
+      ).toBe(403)
+
       expect(
         (await authenticated(users[key], 'delete', `/api/projects/${projectIds.shared}`)).status
-      ).toBe(404)
+      ).toBe(403)
     }
+
+    expect(
+      (
+        await authenticated(users.editor, 'patch', `/api/projects/${projectIds.shared}`).send(
+          projectBody
+        )
+      ).status
+    ).toBe(200)
+
+    expect(
+      (await authenticated(users.editor, 'delete', `/api/projects/${projectIds.shared}`)).status
+    ).toBe(403)
+
     expect(
       (
         await authenticated(users.owner, 'patch', `/api/projects/${projectIds.shared}`).send(
@@ -129,75 +143,60 @@ describe('permissions API', () => {
         )
       ).status
     ).toBe(200)
+
     expect(
       (await authenticated(users.owner, 'delete', `/api/projects/${projectIds.shared}`)).status
     ).toBe(204)
   })
 
-  test('restricts sharing and member management to the owner and applies role changes', async () => {
-    const readerShare = await authenticated(
-      users.reader,
-      'post',
-      `/api/projects/${projectIds.shared}/members`
-    ).send({ email: users.outsider.email, role: 'editeur' })
-    expect(readerShare.status).toBe(404)
-
-    const shared = await authenticated(
-      users.owner,
-      'post',
-      `/api/projects/${projectIds.shared}/members`
-    ).send({ email: users.outsider.email, role: 'lecteur' })
-    expect(shared.status).toBe(201)
-    expect(shared.body.role).toBe('lecteur')
-
-    const updated = await authenticated(
-      users.owner,
+  test('restricts role administration and project deletion to administrators', async () => {
+    // Un responsable peut gérer les membres, mais pas attribuer le rôle administrateur.
+    const forbiddenPromotion = await authenticated(
+      users.editor,
       'patch',
       `/api/projects/${projectIds.shared}/members/${users.outsider.id}`
-    ).send({ role: 'contributeur' })
-    expect(updated.status).toBe(200)
-    expect(updated.body.role).toBe('contributeur')
-    expect((await authenticated(users.outsider, 'post', '/api/tasks').send(newTask)).status).toBe(
-      201
+    ).send({ role: 'administrateur' })
+
+    expect(forbiddenPromotion.status).toBe(403)
+
+    // Un responsable ne peut pas supprimer le projet.
+    const forbiddenDeletion = await authenticated(
+      users.editor,
+      'delete',
+      `/api/projects/${projectIds.shared}`
     )
 
-    const downgraded = await authenticated(
-      users.owner,
+    expect(forbiddenDeletion.status).toBe(403)
+
+    // L'administrateur ajoute d'abord l'utilisateur comme lecteur.
+    const invitation = await authenticated(
+      users.admin,
+      'post',
+      `/api/projects/${projectIds.shared}/members`
+    ).send({
+      email: users.outsider.email,
+      role: 'lecteur',
+    })
+
+    expect(invitation.status).toBe(201)
+
+    // L'administrateur peut ensuite modifier son rôle.
+    const promotion = await authenticated(
+      users.admin,
       'patch',
       `/api/projects/${projectIds.shared}/members/${users.outsider.id}`
-    ).send({ role: 'lecteur' })
-    expect(downgraded.status).toBe(200)
-    expect((await authenticated(users.outsider, 'post', '/api/tasks').send(newTask)).status).toBe(
-      403
+    ).send({ role: 'developpeur' })
+
+    expect(promotion.status).toBe(200)
+    expect(promotion.body.role).toBe('developpeur')
+
+    const deletion = await authenticated(
+      users.admin,
+      'delete',
+      `/api/projects/${projectIds.shared}`
     )
 
-    expect(
-      (
-        await authenticated(
-          users.reader,
-          'patch',
-          `/api/projects/${projectIds.shared}/members/${users.editor.id}`
-        ).send({ role: 'lecteur' })
-      ).status
-    ).toBe(404)
-    expect(
-      (
-        await authenticated(
-          users.reader,
-          'delete',
-          `/api/projects/${projectIds.shared}/members/${users.editor.id}`
-        )
-      ).status
-    ).toBe(404)
-    expect(
-      (
-        await authenticated(
-          users.owner,
-          'delete',
-          `/api/projects/${projectIds.shared}/members/${users.outsider.id}`
-        )
-      ).status
-    ).toBe(204)
+    expect(deletion.status).toBe(204)
   })
 
   test('permits task moves only when the member has edit access to both projects', async () => {
@@ -210,7 +209,7 @@ describe('permissions API', () => {
 
     await pool.query(
       'INSERT INTO project_members(owner_user_id,project_id,member_user_id,role,can_create_tasks,can_edit_tasks) VALUES($1,$2,$3,$4,true,true)',
-      [users.owner.id, projectIds.destination, users.contributor.id, 'contributeur']
+      [users.owner.id, projectIds.destination, users.contributor.id, 'developpeur']
     )
     const allowedMove = await request(app)
       .patch(`/api/tasks/${taskIds.shared}`)
@@ -228,10 +227,10 @@ describe('permissions API', () => {
     expect(
       (await authenticated(users.owner, 'patch', '/api/projects/missing-project').send(projectBody))
         .status
-    ).toBe(404)
+    ).toBe(403)
     expect(
       (await authenticated(users.owner, 'delete', '/api/projects/missing-project')).status
-    ).toBe(404)
+    ).toBe(403)
     expect(
       (await authenticated(users.outsider, 'patch', `/api/tasks/${taskIds.shared}`).send(taskBody))
         .status
@@ -242,7 +241,7 @@ describe('permissions API', () => {
           projectBody
         )
       ).status
-    ).toBe(404)
+    ).toBe(403)
     expect(
       (
         await authenticated(

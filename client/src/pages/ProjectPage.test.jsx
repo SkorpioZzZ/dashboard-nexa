@@ -48,9 +48,12 @@ it('shares a project using the selected permission role', async () => {
   )
 
   expect(screen.getByRole('option', { name: 'Lecteur' })).toBeInTheDocument()
-  expect(screen.getByRole('option', { name: 'Contributeur' })).toBeInTheDocument()
-  expect(screen.getByRole('option', { name: 'Éditeur' })).toBeInTheDocument()
-  fireEvent.change(screen.getByLabelText('Rôle'), { target: { value: 'contributeur' } })
+  expect(screen.getByRole('option', { name: 'Développeur' })).toBeInTheDocument()
+  expect(screen.getByRole('option', { name: 'Responsable' })).toBeInTheDocument()
+  expect(screen.getByRole('option', { name: 'Administrateur' })).toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText('Rôle'), {
+    target: { value: 'developpeur' },
+  })
   fireEvent.change(screen.getByLabelText('Adresse e-mail'), {
     target: { value: 'camille@example.test' },
   })
@@ -59,7 +62,10 @@ it('shares a project using the selected permission role', async () => {
   await waitFor(() => {
     expect(api).toHaveBeenCalledWith('/projects/project-1/members', {
       method: 'POST',
-      body: JSON.stringify({ email: 'camille@example.test', role: 'contributeur' }),
+      body: JSON.stringify({
+        email: 'camille@example.test',
+        role: 'developpeur',
+      }),
     })
   })
   expect(await screen.findByRole('status')).toHaveTextContent('Accès partagé avec succès.')
@@ -78,7 +84,7 @@ it('keeps the keyboard-accessible status selector and does not render it for a r
     id: 'project-1',
     name: 'Projet Nexa',
     isOwner: false,
-    role: 'contributeur',
+    role: 'developpeur',
     members: [],
   }
   const onUpdateTask = vi.fn().mockResolvedValue(null)
@@ -116,7 +122,9 @@ it('keeps the keyboard-accessible status selector and does not render it for a r
   rerender(page({ ...project, role: 'lecteur' }))
   expect(screen.queryByLabelText('Statut de Préparer la revue')).not.toBeInTheDocument()
   expect(
-    screen.queryByRole('button', { name: 'Déplacer la tâche Préparer la revue' })
+    screen.queryByRole('button', {
+      name: 'Déplacer la tâche Préparer la revue',
+    })
   ).not.toBeInTheDocument()
   expect(screen.getByText('À faire')).toBeInTheDocument()
 })

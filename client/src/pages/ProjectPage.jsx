@@ -227,9 +227,14 @@ export function ProjectPage({
     }
   }
 
+  const isOwner = project?.isOwner === true
   const canEditTasks =
-    project?.isOwner !== false || ['contributeur', 'editeur'].includes(project?.role)
-  const canDeleteTasks = project?.isOwner !== false || project?.role === 'editeur'
+    isOwner || ['developpeur', 'responsable', 'administrateur'].includes(project?.role)
+  const canDeleteTasks = isOwner || ['responsable', 'administrateur'].includes(project?.role)
+  const canManageMembers = isOwner || ['responsable', 'administrateur'].includes(project?.role)
+  const canManageRoles = isOwner || project?.role === 'administrateur'
+  const canEditProject = isOwner || ['responsable', 'administrateur'].includes(project?.role)
+  const canDeleteProject = isOwner || project?.role === 'administrateur'
 
   async function moveTask(event) {
     const task = projectTasks.find((item) => String(item.id) === String(event.active.id))
@@ -286,7 +291,7 @@ export function ProjectPage({
               <ProgressBar value={getProjectProgress(id, tasks)} color={project.color} />
             </div>
           </div>
-          {project.isOwner !== false && (
+          {canEditProject && (
             <div className="project-actions">
               <button className="secondary-button" onClick={openManageModal}>
                 Gérer le projet
@@ -294,7 +299,7 @@ export function ProjectPage({
             </div>
           )}
         </section>
-        {project.isOwner !== false && (
+        {canManageMembers && (
           <section className="panel">
             <div className="panel-header">
               <div>
@@ -316,8 +321,13 @@ export function ProjectPage({
                 Rôle
                 <select value={memberRole} onChange={(event) => setMemberRole(event.target.value)}>
                   <option value="lecteur">Lecteur</option>
-                  <option value="contributeur">Contributeur</option>
-                  <option value="editeur">Éditeur</option>
+                  {canManageRoles && (
+                    <>
+                      <option value="developpeur">Développeur</option>
+                      <option value="responsable">Responsable</option>
+                      <option value="administrateur">Administrateur</option>
+                    </>
+                  )}
                 </select>
               </label>
               <button className="primary-button">Partager</button>
@@ -438,19 +448,21 @@ export function ProjectPage({
                 <button className="primary-button">Enregistrer</button>
               </div>
             </form>
-            <div className="project-delete-zone">
-              <p>Cette action supprime définitivement le projet et ses tâches.</p>
-              <button
-                className="danger-button"
-                type="button"
-                onClick={async () => {
-                  if (!window.confirm(`Supprimer « ${project.name} » et ses tâches ?`)) return
-                  if (await onDeleteProject(id)) navigate('/projets')
-                }}
-              >
-                Supprimer le projet
-              </button>
-            </div>
+            {canDeleteProject && (
+              <div className="project-delete-zone">
+                <p>Cette action supprime définitivement le projet et ses tâches.</p>
+                <button
+                  className="danger-button"
+                  type="button"
+                  onClick={async () => {
+                    if (!window.confirm(`Supprimer « ${project.name} » et ses tâches ?`)) return
+                    if (await onDeleteProject(id)) navigate('/projets')
+                  }}
+                >
+                  Supprimer le projet
+                </button>
+              </div>
+            )}
           </section>
         </div>
       )}

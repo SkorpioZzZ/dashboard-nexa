@@ -38,6 +38,14 @@ const users = {
     lastName: 'Test',
     username: 'editor_test',
   },
+  admin: {
+    id: '00000000-0000-4000-8000-000000000006',
+    name: 'Admin Test',
+    email: 'admin@example.test',
+    firstName: 'Admin',
+    lastName: 'Test',
+    username: 'admin_test',
+  },
   outsider: {
     id: '00000000-0000-4000-8000-000000000005',
     name: 'Outsider Test',
@@ -48,7 +56,10 @@ const users = {
   },
 }
 
-const projectIds = { shared: 'test-shared-project', destination: 'test-destination-project' }
+const projectIds = {
+  shared: 'test-shared-project',
+  destination: 'test-destination-project',
+}
 const taskIds = { shared: 'test-shared-task', private: 'test-private-task' }
 
 async function resetDatabase() {
@@ -75,8 +86,9 @@ async function resetDatabase() {
 
   for (const [key, role] of Object.entries({
     reader: 'lecteur',
-    contributor: 'contributeur',
-    editor: 'editeur',
+    contributor: 'developpeur',
+    editor: 'responsable',
+    admin: 'administrateur',
   })) {
     await pool.query(
       'INSERT INTO project_members(owner_user_id,project_id,member_user_id,role,can_create_tasks,can_edit_tasks,can_delete_tasks) VALUES($1,$2,$3,$4,$5,$5,$6)',
@@ -86,7 +98,7 @@ async function resetDatabase() {
         users[key].id,
         role,
         role !== 'lecteur',
-        role === 'editeur',
+        role === 'responsable' || role === 'administrateur',
       ]
     )
   }
