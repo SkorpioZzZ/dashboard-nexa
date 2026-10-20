@@ -54,11 +54,29 @@ async function initializeDatabase() {
     CREATE TABLE IF NOT EXISTS team_members (
       owner_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       member_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      role TEXT NOT NULL DEFAULT 'Membre',
+      role TEXT NOT NULL DEFAULT 'lecteur',
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       PRIMARY KEY (owner_user_id, member_user_id),
       CHECK (owner_user_id <> member_user_id)
     );
+
+    UPDATE team_members
+    SET role = CASE role
+      WHEN 'Administrateur' THEN 'administrateur'
+      WHEN 'Responsable' THEN 'responsable'
+      WHEN 'Développeur' THEN 'developpeur'
+      WHEN 'Contributeur' THEN 'developpeur'
+      WHEN 'Lecteur' THEN 'lecteur'
+      WHEN 'Membre' THEN 'lecteur'
+      WHEN 'administrateur' THEN 'administrateur'
+      WHEN 'responsable' THEN 'responsable'
+      WHEN 'developpeur' THEN 'developpeur'
+      WHEN 'lecteur' THEN 'lecteur'
+      ELSE 'lecteur'
+    END;
+
+    ALTER TABLE team_members
+    ALTER COLUMN role SET DEFAULT 'lecteur';
 
     CREATE TABLE IF NOT EXISTS activity_events (
       id BIGSERIAL PRIMARY KEY,

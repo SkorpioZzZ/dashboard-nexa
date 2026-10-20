@@ -438,7 +438,9 @@ app.post(
     const input = z
       .object({
         email: z.string().trim().email().max(254),
-        role: z.string().trim().max(80).default('Membre'),
+        role: z
+          .enum(['lecteur', 'developpeur', 'responsable', 'administrateur'])
+          .default('lecteur'),
       })
       .safeParse(req.body)
 
@@ -449,7 +451,7 @@ app.post(
     }
 
     const email = input.data.email.toLowerCase()
-    const role = input.data.role || 'Membre'
+    const role = input.data.role || 'lecteur'
 
     const { rows: users } = await pool.query(
       'SELECT id, name, email FROM users WHERE lower(email) = lower($1)',
@@ -501,14 +503,7 @@ app.patch(
 
     const input = z
       .object({
-        role: z.enum([
-          'Administrateur',
-          'Responsable',
-          'Développeur',
-          'Contributeur',
-          'Lecteur',
-          'Membre',
-        ]),
+        role: z.enum(['lecteur', 'developpeur', 'responsable', 'administrateur']),
       })
       .safeParse(req.body)
 
