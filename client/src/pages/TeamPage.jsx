@@ -3,18 +3,16 @@ import { Avatar, Header } from '../components/shared.jsx'
 import { api } from '../lib/api.js'
 
 const TEAM_ROLES = [
-  'Administrateur',
-  'Responsable',
-  'Développeur',
-  'Contributeur',
-  'Lecteur',
-  'Membre',
+  { value: 'lecteur', label: 'Lecteur' },
+  { value: 'developpeur', label: 'Développeur' },
+  { value: 'responsable', label: 'Responsable' },
+  { value: 'administrateur', label: 'Administrateur' },
 ]
 
 export function TeamPage() {
   const [members, setMembers] = useState([])
   const [email, setEmail] = useState('')
-  const [role, setRole] = useState('Membre')
+  const [role, setRole] = useState('Lecteur')
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [removingId, setRemovingId] = useState(null)
@@ -58,7 +56,7 @@ export function TeamPage() {
 
       setMembers((current) => [...current, member])
       setEmail('')
-      setRole('Membre')
+      setRole('Lecteur')
       setSuccess(`${member.name} a été ajouté à votre équipe.`)
     } catch (err) {
       setError(err.message)
@@ -144,8 +142,8 @@ export function TeamPage() {
               Rôle
               <select value={role} onChange={(event) => setRole(event.target.value)}>
                 {TEAM_ROLES.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
+                  <option key={item.value} value={item.value}>
+                    {item.label}
                   </option>
                 ))}
               </select>
@@ -182,7 +180,7 @@ export function TeamPage() {
                 .join('')
                 .toUpperCase()
 
-              const knownRole = member.role || 'Membre'
+              const knownRole = member.role || 'Lecteur'
 
               return (
                 <article className="team-card" key={member.id}>
@@ -196,12 +194,12 @@ export function TeamPage() {
                       disabled={updatingRoleId === member.id || removingId === member.id}
                       onChange={(event) => updateRole(member, event.target.value)}
                     >
-                      {!TEAM_ROLES.includes(knownRole) && (
+                      {!TEAM_ROLES.some((item) => item.value === knownRole) && (
                         <option value={knownRole}>{knownRole}</option>
                       )}
                       {TEAM_ROLES.map((item) => (
-                        <option key={item} value={item}>
-                          {item}
+                        <option key={item.value} value={item.value}>
+                          {item.label}
                         </option>
                       ))}
                     </select>
